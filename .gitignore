@@ -1,0 +1,5 @@
+.DS_STORE
+*.swp
+.env
+vars.json
+cookies-facebook-com.txt
