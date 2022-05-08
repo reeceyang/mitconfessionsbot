@@ -1,5 +1,5 @@
 .DS_STORE
 *.swp
 .env
-vars.json
+storage.json
 cookies-facebook-com.txt
