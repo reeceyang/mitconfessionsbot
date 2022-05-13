@@ -6,9 +6,23 @@ from discord.ext import tasks
 from dotenv import load_dotenv
 from facebook_scraper import get_posts
 import json
+import pymongo
 
 load_dotenv()
 channels = set()
+
+client = pymongo.MongoClient(os.getenv('MONGODB_CONN_STR'), serverSelectionTimeoutMS=5000)
+db = client.Cluster0
+collection = db.confessions
+
+def insert_confession(post, number):
+    confession = {**post, 'number': number}
+    print('inserted',number,'with id',collection.insert_one(confession).inserted_id)
+
+try:
+    print(client.server_info())
+except Exception:
+    print("Unable to connect to the server.")
 
 def read_config():
     """returns the json object stored in config.js"""
@@ -101,13 +115,17 @@ async def update_confessions(channel):
         posts, lowest_number = get_confessions(pages, last_number)
         pages *= 2
     for post in posts:
-        text = post['post_text']
-        number = get_number(text)
-        max_number = max(max_number, number)
-        response_list = format_confession(post)
-        for response in response_list:
-            await channel.send(response)
-        got_confessions = True
+        try:
+            text = post['post_text']
+            number = get_number(text)
+            max_number = max(max_number, number)
+            response_list = format_confession(post)
+            for response in response_list:
+                await channel.send(response)
+            insert_confession(post, number)
+            got_confessions = True
+        except Exception as e:
+            print(str(e))
     last_number = max_number
     dump_storage()
     return got_confessions
