@@ -13,21 +13,32 @@ channels = set()
 
 client = pymongo.MongoClient(os.getenv('MONGODB_CONN_STR'), serverSelectionTimeoutMS=5000)
 db = client.Cluster0
-collection = db.confessions
+
+def read_config():
+    """returns the json object stored in config.js"""
+    with open('config.json') as f:
+        return json.loads(f.read())
+
+if read_config()['production']:
+    collection = db.confessions
+else:
+    collection = db.testing
 
 def insert_confession(post, number):
     confession = {**post, 'number': number}
     print('inserted',number,'with id',collection.insert_one(confession).inserted_id)
+
+def insert_confessions(posts):
+    for post in posts:
+        text = post['post_text']
+        number = get_number(text)
+        insert_confession(post, text)
 
 try:
     print(client.server_info())
 except Exception:
     print("Unable to connect to the server.")
 
-def read_config():
-    """returns the json object stored in config.js"""
-    with open('config.json') as f:
-        return json.loads(f.read())
 
 def read_storage():
     with open('storage.json') as f:
@@ -104,67 +115,74 @@ def get_number(text):
 async def on_ready():
     print(f'{client.user} has connected to Discord!')
 
-async def update_confessions(channel):
+async def update_confessions():
+    """gets new confessions, posts them to all connected channels, and inserts them into database"""
     global last_number
-    max_number = last_number
-    got_confessions = False
+    posts, max_number = get_new_posts()
+    if len(posts) == 0:
+        # no new confessions
+        return False
+    last_number = max_number
+    dump_storage()
+    insert_confessions(posts)
+    for channel_id in channels:
+        channel = client.get_channel(channel_id)
+        await post_confessions(posts, channel)
+    return True
+
+def get_new_posts():
+    """attempts to get any new confessions"""
     posts = []
     lowest_number = last_number + 2
     pages = 16
+    max_number = last_number
     while lowest_number > last_number + 1:
-        posts, lowest_number = get_confessions(pages, last_number)
+        posts, lowest_number, max_number = get_confessions(pages, last_number)
         pages *= 2
+    return posts, max_number
+
+async def post_confessions(posts, channel):
+    """post all confessions in `posts` to `channel`"""
     for post in posts:
         try:
-            text = post['post_text']
-            number = get_number(text)
-            max_number = max(max_number, number)
             response_list = format_confession(post)
             for response in response_list:
                 await channel.send(response)
-            insert_confession(post, number)
-            got_confessions = True
         except Exception as e:
             print(str(e))
-    last_number = max_number
-    dump_storage()
-    return got_confessions
-
+ 
 def get_confessions(num_pages, stop_number=None):
-    """return a list of posts and the lowest confession number retrieved"""
+    """return a list of posts, the lowest number retrieved, and the highest confession number retrieved"""
     posts = []
     print("getting confessions")
     number = None
+    max_number = 0
     for post in get_posts('beaverconfessions', cookies="cookies-facebook-com.txt", pages=num_pages):
         text = post['post_text']
         # ignore pinned post
         if text[0] != "#": 
             continue 
         number = get_number(text)
+        max_number = max(max_number, number)
         if stop_number is not None and number <= stop_number:
             break
         print("got confession", number)
         posts.insert(0, post) 
     assert number is not None
-    return posts, number + 1
+    assert max_number != 0
+    return posts, number + 1, max_number
 
-async def get_recent_confessions(channel):
-    for post in get_posts('beaverconfessions', cookies="cookies-facebook-com.txt", pages=3):
-        text = get_post_text(post['post_text'])
-        # ignore pinned post
-        if text[0] != "#": 
-            continue 
-        response = bold_number(text)
-        print("got confession",get_number(text))
-        await channel.send(response)
+async def show_recent_confessions(channel):
+    posts, _, _ = get_confessions(2)
+    await post_confessions(posts, channel)
 
 @client.event
 async def on_message(message):
-#    if message.content == "getconfess":
-#        await get_confessions(message.channel)
-#    if message.content == "getconfess recent":
-#        pass
-#        # await get_recent_confessions(message.channel)
+    if message.content == "getconfess":
+        if not await update_confessions():
+            await message.channel.send('no new confessions')
+    if message.content == "getconfess recent":
+        await show_recent_confessions(message.channel)
     if client.user.mentioned_in(message):
         if 'channel' in message.content:
             if 'set' in message.content:
@@ -177,10 +195,8 @@ async def on_message(message):
             
 @tasks.loop(minutes=60)
 async def my_background_task():
-    for channel_id in channels:
-        channel = client.get_channel(channel_id)
-        if not await update_confessions(channel):
-            await message.channel.send("no new confessions")
+    if not await update_confessions():
+        print('no new confessions')
 
 @my_background_task.before_loop
 async def my_background_task_before_loop():
