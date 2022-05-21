@@ -31,7 +31,10 @@ def insert_confession(post, number):
 def insert_confessions(posts):
     for post in posts:
         text = post['post_text']
-        number = get_number(text)
+        try:
+            number = get_number(text)
+        except ValueError:
+            continue
         insert_confession(post, text)
 
 try:
@@ -109,6 +112,9 @@ def bold_number(text):
     return "**" + text[0:first_space] + "**" + text[first_space:]
 
 def get_number(text): 
+    # HACK: wtf mit confessions admin
+    if "#64205I" in text:
+        return 64205
     return int(text[1:text.index(" ")])
 
 @client.event
@@ -162,7 +168,10 @@ def get_confessions(num_pages, stop_number=None):
         # ignore pinned post
         if text[0] != "#": 
             continue 
-        number = get_number(text)
+        try:
+            number = get_number(text)
+        except ValueError:
+            continue
         max_number = max(max_number, number)
         if stop_number is not None and number <= stop_number:
             break
