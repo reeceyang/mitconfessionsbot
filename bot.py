@@ -166,7 +166,7 @@ def get_confessions(num_pages, stop_number=None):
     for post in get_posts('beaverconfessions', cookies="cookies-facebook-com.txt", pages=num_pages):
         text = post['post_text']
         # ignore pinned post
-        if text[0] != "#": 
+        if not text or text[0] != "#": 
             continue 
         try:
             number = get_number(text)
