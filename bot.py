@@ -124,16 +124,20 @@ async def on_ready():
 async def update_confessions():
     """gets new confessions, posts them to all connected channels, and inserts them into database"""
     global last_number
-    posts, max_number = get_new_posts()
+    posts, lowest_number, max_number = get_new_posts()
     if len(posts) == 0:
         # no new confessions
         return False
+    missed_confessions = lowest_number - last_number - 1
+    missed_string = f"failed to retrieve {missed_confessions} confessions from **#{last_number + 1}** to **#{lowest_number - 1}**"
     last_number = max_number
     dump_storage()
     insert_confessions(posts)
     for channel_id in channels:
         channel = client.get_channel(channel_id)
         await post_confessions(posts, channel)
+        if missed_confessions > 0: 
+            await channel.send(missed_string)
     return True
 
 def get_new_posts():
@@ -145,7 +149,7 @@ def get_new_posts():
     while lowest_number > last_number + 1:
         posts, lowest_number, max_number = get_confessions(pages, last_number)
         pages *= 2
-    return posts, max_number
+    return posts, lowest_number, max_number
 
 async def post_confessions(posts, channel):
     """post all confessions in `posts` to `channel`"""
@@ -163,20 +167,23 @@ def get_confessions(num_pages, stop_number=None):
     print("getting confessions")
     number = None
     max_number = 0
-    for post in get_posts('beaverconfessions', cookies="cookies-facebook-com.txt", pages=num_pages):
-        text = post['post_text']
-        # ignore pinned post
-        if not text or text[0] != "#": 
-            continue 
-        try:
-            number = get_number(text)
-        except ValueError:
-            continue
-        max_number = max(max_number, number)
-        if stop_number is not None and number <= stop_number:
-            break
-        print("got confession", number)
-        posts.insert(0, post) 
+    try:
+        for post in get_posts('beaverconfessions', cookies="cookies-facebook-com.txt", pages=num_pages):
+            text = post['post_text']
+            # ignore pinned post
+            if not text or text[0] != "#": 
+                continue 
+            try:
+                number = get_number(text)
+            except ValueError:
+                continue
+            max_number = max(max_number, number)
+            if stop_number is not None and number <= stop_number:
+                break
+            print("got confession", number)
+            posts.insert(0, post) 
+    except Exception:
+        pass
     assert number is not None
     assert max_number != 0
     return posts, number + 1, max_number
