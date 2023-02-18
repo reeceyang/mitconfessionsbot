@@ -147,7 +147,9 @@ def get_new_posts():
     pages = 16
     max_number = last_number
     while lowest_number > last_number + 1:
-        posts, lowest_number, max_number = get_confessions(pages, last_number)
+        posts, lowest_number, max_number, is_error = get_confessions(pages, last_number)
+        if is_error:
+            break
         pages *= 2
     return posts, lowest_number, max_number
 
@@ -165,8 +167,9 @@ def get_confessions(num_pages, stop_number=None):
     """return a list of posts, the lowest number retrieved, and the highest confession number retrieved"""
     posts = []
     print("getting confessions")
-    number = None
-    max_number = 0
+    min_number = float('inf') 
+    max_number = stop_number 
+    is_error = False
     try:
         for post in get_posts('beaverconfessions', cookies="cookies-facebook-com.txt", pages=num_pages):
             text = post['post_text']
@@ -178,15 +181,16 @@ def get_confessions(num_pages, stop_number=None):
             except ValueError:
                 continue
             max_number = max(max_number, number)
+            min_number = min(min_number, number)
             if stop_number is not None and number <= stop_number:
                 break
             print("got confession", number)
             posts.insert(0, post) 
+        assert max_number != 0
+        assert min_number < float('inf')
     except Exception:
-        pass
-    assert number is not None
-    assert max_number != 0
-    return posts, number + 1, max_number
+        is_error = True
+    return posts, min_number, max_number, is_error
 
 async def show_recent_confessions(channel):
     posts, _, _ = get_confessions(2)
