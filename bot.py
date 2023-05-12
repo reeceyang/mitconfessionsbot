@@ -3,6 +3,7 @@ import os
 import sys
 import discord
 from discord.ext import tasks
+from discord import app_commands
 from dotenv import load_dotenv
 from facebook_scraper import get_posts
 import json
@@ -74,7 +75,9 @@ try:
 except FileNotFoundError:
     dump_storage()
 
-client = discord.Client()
+intents = discord.Intents.default()
+client = discord.Client(intents=intents)
+tree = app_commands.CommandTree(client)
 
 
 # def get_post_text(text):
@@ -128,11 +131,6 @@ def get_number(text):
     if "#64205I" in text:
         return 64205
     return int(text[1:text.index(" ")])
-
-
-@client.event
-async def on_ready():
-    print(f'{client.user} has connected to Discord!')
 
 
 async def update_confessions():
@@ -213,6 +211,30 @@ def get_confessions(num_pages, stop_number=None):
 async def show_recent_confessions(channel):
     posts, _, _ = get_confessions(2)
     await post_confessions(posts, channel)
+
+
+@client.event
+async def on_ready():
+    await tree.sync()
+    print(f'{client.user} has connected to Discord!')
+
+
+@tree.command(name="getconfess", description="Get new confessions")
+async def getconfess_command(interaction):
+    if not await update_confessions():
+        await interaction.channel.send('no new confessions')
+
+
+@tree.command(name="set_confess_channel", description="Post new confessions to this channel")
+async def set_confess_command(interaction):
+    channels.add(interaction.channel.id)
+    await interaction.channel.send('new confessions will be posted in #' + interaction.channel.name)
+
+
+@tree.command(name="remove_confess_channel", description="Don't post new confessions to this channel")
+async def remove_confess_command(interaction):
+    channels.discard(interaction.channel.id)
+    await interaction.channel.send('new confessions will not be posted in #' + interaction.channel.name)
 
 
 @client.event
