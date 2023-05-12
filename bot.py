@@ -216,25 +216,28 @@ async def show_recent_confessions(channel):
 @client.event
 async def on_ready():
     await tree.sync()
+    my_background_task.start()
     print(f'{client.user} has connected to Discord!')
 
 
 @tree.command(name="getconfess", description="Get new confessions")
 async def getconfess_command(interaction):
     if not await update_confessions():
-        await interaction.channel.send('no new confessions')
+        await interaction.response.send_message('no new confessions')
+    else:
+        interaction.response.send_message('got new confessions')
 
 
 @tree.command(name="set_confess_channel", description="Post new confessions to this channel")
 async def set_confess_command(interaction):
     channels.add(interaction.channel.id)
-    await interaction.channel.send('new confessions will be posted in #' + interaction.channel.name)
+    await interaction.response.send_message('new confessions will be posted in #' + interaction.channel.name)
 
 
 @tree.command(name="remove_confess_channel", description="Don't post new confessions to this channel")
 async def remove_confess_command(interaction):
     channels.discard(interaction.channel.id)
-    await interaction.channel.send('new confessions will not be posted in #' + interaction.channel.name)
+    await interaction.response.send_message('new confessions will not be posted in #' + interaction.channel.name)
 
 
 @client.event
@@ -266,5 +269,4 @@ async def my_background_task_before_loop():
     await client.wait_until_ready()
 
 
-my_background_task.start()
 client.run(TOKEN)
