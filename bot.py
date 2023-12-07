@@ -186,7 +186,7 @@ def get_confessions(num_pages, stop_number=None):
     max_number = stop_number
     is_error = False
     try:
-        for post in get_posts('beaverconfessions', cookies="cookies-facebook-com.txt", pages=num_pages):
+        for post in get_posts('beaverconfessions', start_url="https://mbasic.facebook.com/beaverconfessions?v=timeline", cookies="cookies-facebook-com.txt", pages=num_pages):
             text = post['post_text']
             # ignore pinned post
             if not text or text[0] != "#":
@@ -194,16 +194,18 @@ def get_confessions(num_pages, stop_number=None):
             try:
                 number = get_number(text)
             except ValueError:
+                print(f"got value error while parsing text: {text}")
                 continue
             max_number = max(max_number, number)
             min_number = min(min_number, number)
             if stop_number is not None and number <= stop_number:
                 break
-            print("got confession", number)
+            print("parsed confession", number)
             posts.insert(0, post)
         assert max_number != 0
         assert min_number < float('inf')
-    except Exception:
+    except Exception as e:
+        print("error:", str(e))
         is_error = True
     return posts, min_number, max_number, is_error
 
